@@ -1,18 +1,34 @@
+##
+#
+# verwandt3.pl
+#
+# perl verwandt3.pl ARGUMENT
+# ARGUMENT in der Form: "Die Tochter des Vaters meiner Mutter"
+#
+##
+
 use strict;
 use warnings;
 
 my $stdin = $ARGV[0];
+
+unless ($ARGV[0]) {
+  print "Argument fehlt! Keine Auswertung möglich.\n";
+  exit;
+}
+
+my $breakpoint = -1; #Zur Bestimmung der Eindeutigkeit eines Resultats
 
 my %mw = ( 	Mutter => "Vater",
 		Tochter => "Sohn",
 		Schwester => "Bruder",
 		Nichte => "Neffe",
 		Tante => "Onkel",
-		Cousine => "Cousin"
+		Cousine => "Cousin",
 	);
 
 
-%verwandtschaftIndex = ( 					
+my %verwandtschaftIndex = ( 					
 				Mutter => "o",
 				Tochter => "ur",
 				Schwester => "r",
@@ -23,37 +39,37 @@ my %mw = ( 	Mutter => "Vater",
 
 #Geschlecht bestimmen.
 my $geschlecht;
-$stdin =~ /^(?:ur)*(?:gross|enkel)*(.*?)\s/i;
+$stdin =~ /^(?:ur)*(?:gross|enkel)*(.*?)(\s|$)/i;
 if (defined $verwandtschaftIndex{ucfirst(lc($1))}) { $geschlecht = "w"; }
 else { $geschlecht = "m" }
 
-#Begrifflichkeiten auf weiblich ändern (1.keine s, 2. weniger schreibarbeit)
+#Begrifflichkeiten auf weiblich ändern (1. s könnten bei eq gefährlich
+#werden, 2. weniger schreibarbeit)
 $stdin =~ s/vater(s)*/mutter/gi;
 $stdin =~ s/bruder(s)*/schwester/gi;
 $stdin =~ s/sohn(es)*/tochter/gi;
 $stdin =~ s/neffe(n)*/nichte/gi;
 $stdin =~ s/onkel(s)*/tante/gi;
 $stdin =~ s/cousin(s)* /cousine /gi;
+
 #Feststellen der Verwandtschaft von hinten nach vorne
+my @aufgespaltet =  $stdin =~ /(cousine(?:\s\d+\.Grades)*|\w*tante(?:\s\d+\.Grades)*|\w*nichte(?:\s\d+\.Grades)*|\w*mutter|\w*tochter|schwester)/ig;
 
-my @aufgespaltet =  $stdin =~ /(cousine(?:\s\d+\.Grades)*|\w*tante|\w*nichte|\w*mutter|\w*tochter|schwester)/ig;
-
+# Weg bestimmen.
 my $index;
-
 foreach (reverse(@aufgespaltet)) {
   my $weg = Weg(lc($_));
+  eindeutig($index, $weg);
   $index .= $weg;
   $index = Regel($index) unless ($index eq "ur");
 }
 
 my $bezeichnung = Bezeichnung($index);
 
-my $weg = Weg($bezeichnung);
-
-#Richtiges Geschlecht bestimmen. Die Notation stimmt schon, wenn das Geschlecht
+# Richtiges Geschlecht bestimmen. Die Notation stimmt schon, wenn das Geschlecht
 # weiblich ist, deshalb wird es nur verändert wenn $geschlecht == "m"
 
-if ($geschlecht eq "m") {
+if ($geschlecht eq "m" and not($bezeichnung eq "DU")) {
   $bezeichnung =~ /^(?:ur)*(?:gross|enkel)*(.*?)(\s|$)/i;
   my $bez = $1;
   my $ers = lc($mw{ucfirst(lc($bez))});
@@ -61,7 +77,57 @@ if ($geschlecht eq "m") {
   $bezeichnung = ucfirst($bezeichnung);
 }
 
-print "$bezeichnung\n";
+if ($breakpoint > -1) {
+  print "Kein eindeutiges Resultat möglich!\n";
+  my @verwandte = findeVerwandteLinks($index);
+  print "Möglichkeiten: " . join(", ", @verwandte) . "\n";
+}
+else {
+  print "$bezeichnung\n";
+}
+
+sub findeVerwandteLinks {
+  my $index = $_[0];
+  my @verwandte;
+
+  push @verwandte, Bezeichnung($index);
+  while ($index =~ /^o/ and $index =~ /u$/) {
+    $index =~ s/u//;
+    $index =~ s/o//;    
+    push @verwandte, Bezeichnung($index);
+  }
+  $index =~ s/r//;
+  push @verwandte, Bezeichnung($index);
+
+  return(@verwandte);
+}
+
+sub eindeutig  {
+  my $indexStart = $_[0];
+  my $indexPlus = $_[1];
+  return(1) unless (defined $indexStart);
+  my $index = $indexStart . $indexPlus;
+
+  my @generationStart = Generation($indexStart); 
+  my @generationPlus = Generation($indexPlus);
+  my @generation = Generation($index);
+
+  if ($generation[0] >= 0 and $index =~ /ou/) { # "Tochter der Mutter-Problem" 
+	  $breakpoint = $generationStart[0]-1;
+  }
+  elsif ($indexPlus =~ /r/ and $generationStart[2] != 0 and $generationStart[2] == $generationPlus[1]) { #Schwester der Tante-Problem!
+	  $breakpoint = $generationStart[1];
+  }
+  elsif ($index =~ /rr/) { #"Schwester der Schwester Problem!
+	  $breakpoint = $generationStart[1];
+  }
+
+  if ($breakpoint > -1 and $generation[0] > $breakpoint) {
+	  $breakpoint = -1;
+  }
+  
+  return(1);
+}
 
 ##
 # 
@@ -82,6 +148,10 @@ sub Regel {
   $index =~ s/ro/o/g;
   # ou wird gelöscht, da es sich aufhebt.
   while ($index =~ s/ou|uo//) {};
+
+  # ro wird durch r ersetzt, da Geschwister die gleichen Eltern haben.
+  $index =~ s/ro/o/;
+
   # rr wird durch r ersetzt, da z.B. die Schwester der Schwester meiner Tante
   # auch meine Tante ist.
   $index =~ s/rr/r/g;
@@ -103,7 +173,7 @@ sub Regel {
 sub Generation {
 
   my $index = $_[0];
-  # Generation bestimmen
+  
   my $countO = () = $index =~ m/o/g; # Alle o's zählen
   my $countU = () = $index =~ m/u/g; # Alle u's zählen
 
@@ -123,7 +193,7 @@ sub Generation {
 
 sub Verwandtschaftsgrad {
   my $index = $_[0];
-  my ($generation, $countO)  = Generation($index);
+  my ($generation, $countO, $countU)  = Generation($index);
   my $vgReihe = 0; # Bezeichnet den Verwandtschaftsgrad in der Reihe (siehe Übungsblatt).
   my $vgBezeichnung = 0; # Bezeichnet den Verwandtschaftsgrad in der Bezeichnung also z.B. das "2.Grades".
   if ($index =~ /r/) { 
@@ -138,7 +208,7 @@ sub Verwandtschaftsgrad {
       $vgBezeichnung = $vgReihe - $generation;
     }
   }
-  return ($vgBezeichnung);
+  return wantarray ? ($vgBezeichnung, $vgReihe) : $vgBezeichnung;
 }
 
 ##
@@ -154,7 +224,10 @@ sub Bezeichnung {
   my $bezeichnung;
   my $generation = Generation($index);
 
-  if ($index eq "r") { # Schwester
+  if ($index eq "") {
+    return("DU");
+  }
+  elsif ($index eq "r") { # Schwester
     return("Schwester");
   }
   elsif ($index =~ /or/ and $generation > 0) { # Tante
@@ -164,19 +237,19 @@ sub Bezeichnung {
     if ($generation == 0) {
       $bezeichnung = "Cousine";
     }
-    else {
-      $bezeichnung = _Bezeichnung($generation, "Nichte"); # Ruft die Funktion Bezeichung mit dem Argument "Nichte" und $generation auf.
+    else { # Nichte
+      $bezeichnung = _Bezeichnung($generation, "Nichte"); 
     }
   }
   elsif ($index =~ /o$/) { # Mutter
     $bezeichnung = _Bezeichnung($generation, "Mutter");
   }
   else { # Tochter
-    $bezeichnung = _Bezeichnung($generation, "Tochter", "Enkel"); # Ruft die Funktion Bezeichung mit dem Argument "Nichte", "Enkel" und $generation auf.
+    $bezeichnung = _Bezeichnung($generation, "Tochter", "Enkel"); 
   }  
 
   my $vg = Verwandtschaftsgrad($index);
-  $bezeichnung .= abs($vg) > 1 ? " $vg.Grades" : '';
+  $bezeichnung .= abs($vg) > 1 ? " $vg.Grades" : ''; 
 
   return ($bezeichnung);
 }
@@ -196,17 +269,17 @@ sub Bezeichnung {
 
 sub _Bezeichnung {
   my $generation = $_[0];
-  my $bezeichnung = lc($_[1]); #Bitte alles in Kleinbuchstaben.
-  my $anders = lc($_[2]); # Falls wir eine andere Beizeichnung als gross benötigen.
-  my $genNeutral = abs($generation); #Ich möchte gerne positive Zahlen
-  if ($genNeutral > 1) { # Nur wenn über oder unter Generation 0
-    $bezeichnung = ($anders?$anders:"gross") . $bezeichnung; # Wir fügen gross hinzu
-    foreach(1..($genNeutral-2)) { #Für jede Generation über 1 und unter 1 wird ein ur dazugefügt.
+  my $bezeichnung = lc($_[1]);
+  my $anders = lc($_[2]);
+  my $genNeutral = abs($generation);
+  if ($genNeutral > 1) {
+    $bezeichnung = ($anders?$anders:"gross") . $bezeichnung;
+    foreach(1..($genNeutral-2)) {
       $bezeichnung = "ur" . $bezeichnung;
     }
   }
-  $bezeichnung = ucfirst($bezeichnung); # Den ersten Buchstaben bitte gross;
-  return ($bezeichnung); #Und den Wert bitte zurückgeben.
+  $bezeichnung = ucfirst($bezeichnung);
+  return ($bezeichnung);
 }
 
 
@@ -222,16 +295,16 @@ sub Weg {
 
   return($grundWeg) if ($grundBezeichnung eq "schwester");
 
-  if ($grundBezeichnung eq "tochter" or $grundBezeichnung eq "nichte") {
-    return($grundWeg) unless ($zusatz);
+  if (		$grundBezeichnung eq "tochter" 
+	     or $grundBezeichnung eq "nichte" ) {
     if ($zusatz) {
       $grundWeg = Regel($grundWeg); #Da Tochter ur ist kann.
       $grundWeg .= "u";
       while ($zusatz =~ /ur/g) { $grundWeg .= "u" }
+      $grundWeg .= "r" if ($grundBezeichnung eq "tochter");
     }
   }
   elsif ($grundBezeichnung eq "mutter" or $grundBezeichnung eq "tante") {
-    return($grundWeg) unless ($zusatz);
     if ($zusatz) {
       $grundWeg = "o" . $grundWeg;
       while ($zusatz =~ /ur/ig) { $grundWeg = "o" . $grundWeg; }
@@ -240,12 +313,6 @@ sub Weg {
 
   return($grundWeg) unless ($vg);
 
-  if ($zusatz) {
-    $grundWeg .= "u";
-    while ($zusatz =~ /ur/g) {
-      $grundWeg .= "u";
-    }
-  }
   if ($vg) {
     foreach(2..$vg) {
       $grundWeg = "o" . $grundWeg . "u";
