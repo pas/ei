@@ -1,10 +1,13 @@
 ##
 #
-# verwandt3.pl
-#
 # perl verwandt3.pl ARGUMENT
-# ARGUMENT in der Form: "Tochter des Vaters meiner Mutter"
+# ARGUMENT in der Form: "Tochter der Cousine 2.Grades meiner Mutter"
 # verlangt.
+#
+# Author: 	Pascal Zaugg (in Kooperation mit Judith Fuog)
+# Matrikelnr:	xx-xxx-xxx
+# Datum:	29-10-2010
+# Programm:	verwandt3.pl
 #
 ##
 
@@ -71,26 +74,39 @@ foreach (reverse(@aufgespaltet)) {
 #Aus dem Weg die Bezeichnung erstellen.
 my $bezeichnung = Bezeichnung($index);
 
-# Richtiges Geschlecht bestimmen. Die Notation stimmt schon, wenn das Geschlecht
-# weiblich ist, deshalb wird es nur verändert wenn $geschlecht == "m"
-
-if ($geschlecht eq "m" and not($bezeichnung eq "DU")) {
-  $bezeichnung =~ /^(?:ur)*(?:gross|enkel)*(.*?)(\s|$)/i;
-  my $bez = $1;
-  my $ers = lc($mw{ucfirst(lc($bez))});
-  $bezeichnung =~ s/$bez/$ers/;
-  $bezeichnung = ucfirst($bezeichnung);
-}
 
 #Eindeutigkeit überprüfen und bei Uneindeutigkeit alle Varianten ausgeben.
 
 if ($breakpoint > -1) {
   print "Kein eindeutiges Resultat möglich!\n";
   my @verwandte = findeVerwandteLinks($index);
-  print "Möglichkeiten: " . join(", ", @verwandte) . "\n";
+
+# Richtiges Geschlecht bestimmen. Die Notation stimmt schon, wenn das Geschlecht
+# weiblich ist, deshalb wird es nur verändert wenn $geschlecht == "m"
+  my @verwandteKorr;
+  if ($geschlecht eq "m") {
+    foreach (@verwandte) {
+      push @verwandteKorr, aendereGeschlecht($_);
+    }
+  }
+  else { @verwandteKorr = @verwandteKorr; }
+
+  print "Möglichkeiten: " . join(", ", @verwandteKorr) . "\n";
 }
 else {
+  $bezeichnung = aendereGeschlecht($bezeichnung) if ($geschlecht eq "m");
   print "$bezeichnung\n";
+}
+
+sub aendereGeschlecht {
+  my $bezeichnung = $_[0];
+  return ($bezeichnung) if ($bezeichnung eq "DU");
+
+  $bezeichnung =~ /^(?:ur)*(?:gross|enkel)*(.*?)(\s|$)/i;
+  my $bez = $1;
+  my $ers = lc($mw{ucfirst(lc($bez))});
+  $bezeichnung =~ s/$bez/$ers/;
+  $bezeichnung = ucfirst($bezeichnung);
 }
 
 ###
