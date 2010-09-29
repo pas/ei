@@ -3,15 +3,18 @@
 # verwandt3.pl
 #
 # perl verwandt3.pl ARGUMENT
-# ARGUMENT in der Form: "Die Tochter des Vaters meiner Mutter"
+# ARGUMENT in der Form: "Tochter des Vaters meiner Mutter"
+# verlangt.
 #
 ##
 
 use strict;
 use warnings;
 
+#Argument einlesen
 my $stdin = $ARGV[0];
 
+#Falls kein Argument vorhanden, dann abbrechen und Meldung ausgeben.
 unless ($ARGV[0]) {
   print "Argument fehlt! Keine Auswertung möglich.\n";
   exit;
@@ -19,6 +22,7 @@ unless ($ARGV[0]) {
 
 my $breakpoint = -1; #Zur Bestimmung der Eindeutigkeit eines Resultats
 
+#Umwandlungstabellen erstellen
 my %mw = ( 	Mutter => "Vater",
 		Tochter => "Sohn",
 		Schwester => "Bruder",
@@ -64,6 +68,7 @@ foreach (reverse(@aufgespaltet)) {
   $index = Regel($index) unless ($index eq "ur");
 }
 
+#Aus dem Weg die Bezeichnung erstellen.
 my $bezeichnung = Bezeichnung($index);
 
 # Richtiges Geschlecht bestimmen. Die Notation stimmt schon, wenn das Geschlecht
@@ -77,6 +82,8 @@ if ($geschlecht eq "m" and not($bezeichnung eq "DU")) {
   $bezeichnung = ucfirst($bezeichnung);
 }
 
+#Eindeutigkeit überprüfen und bei Uneindeutigkeit alle Varianten ausgeben.
+
 if ($breakpoint > -1) {
   print "Kein eindeutiges Resultat möglich!\n";
   my @verwandte = findeVerwandteLinks($index);
@@ -85,6 +92,16 @@ if ($breakpoint > -1) {
 else {
   print "$bezeichnung\n";
 }
+
+###
+# 
+# findeVerwandteLinks($arg1, $arg2)
+# Findet alle Verwandten links aus der gleichen
+# Generation, der angegebenen Person.
+# $arg[0] verlangt einen Weg auf der Ahnentafel
+# (keine Bezeichnung!).
+#
+###
 
 sub findeVerwandteLinks {
   my $index = $_[0];
@@ -101,6 +118,18 @@ sub findeVerwandteLinks {
 
   return(@verwandte);
 }
+
+###
+# 
+# eindeutig($arg1, $arg2)
+# Überprüft, ob ein beim Hinzufügen eines neuen Weges 
+# Uneindeutigkeiten entstehen. Falls der Weg
+# nicht eindeutig ist, wird in $breakpoint die
+# Generation, ab welcher sie entsteht, abgespeichrt.
+# $arg1 verlangt den ursprünglichen Weg. $arg2
+# verlangt den Weg, welcher dazugefügt wird.
+#
+###
 
 sub eindeutig  {
   my $indexStart = $_[0];
@@ -129,7 +158,7 @@ sub eindeutig  {
   return(1);
 }
 
-##
+###
 # 
 # Regel($arg1)
 # Wendet Regeln auf einen Weg auf der Ahnentafel an, so dass daraus der
@@ -146,10 +175,13 @@ sub Regel {
 
   # ro wird durch r ersetzt, da Geschwister die gleichen Eltern haben.
   $index =~ s/ro/o/g;
+
   # ou wird gelöscht, da es sich aufhebt.
   while ($index =~ s/ou|uo//) {};
 
   # ro wird durch r ersetzt, da Geschwister die gleichen Eltern haben.
+  # In manchen Fällen kann es vorkommen, dass ein ro nach dem entfernen
+  # von ou und uo stehen bleibt. Deshalb die Wiederholung.
   $index =~ s/ro/o/;
 
   # rr wird durch r ersetzt, da z.B. die Schwester der Schwester meiner Tante
@@ -167,6 +199,9 @@ sub Regel {
 # Generation($arg1);
 # $arg1 wird als Weg auf der Ahnentafel benötigt
 # z.B. für Cousine "oru" (oben-rechts-unten)
+# Gibt im Listenkontext die Generation, die Anzahl os 
+# und Anzahl us als zurück. Im skalaren Kontext nur
+# die Generation.
 #
 ##
 
@@ -254,7 +289,7 @@ sub Bezeichnung {
   return ($bezeichnung);
 }
 
-##
+###
 #
 # _Bezeichnung($arg1, $arg2, [$arg3])
 # Eine Helferfunktion für Bezeichung, die die grobe erste Bezeichnung 
@@ -265,7 +300,7 @@ sub Bezeichnung {
 # $arg3 ist optional und wird dann verwendet, wenn im Begriff eine
 # andere Bezeichnung als gross verwendet wird (z.B. bei Enkeltochter).
 #
-##
+###
 
 sub _Bezeichnung {
   my $generation = $_[0];
@@ -282,6 +317,15 @@ sub _Bezeichnung {
   return ($bezeichnung);
 }
 
+###
+#
+# Weg($arg1)
+# Findet zu einer Bezeichnung den kürzesten Weg auf der
+# Ahnentafel.
+# $arg[0] wird als Bezeichnung eines Verwandten erwartet,
+# z.B. Grossonkel.
+#
+###
 
 sub Weg {
   my $bezeichnung = $_[0];
