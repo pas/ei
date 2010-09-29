@@ -85,13 +85,10 @@ if ($breakpoint > -1) {
 # weiblich ist, deshalb wird es nur verändert wenn $geschlecht == "m"
   my @verwandteKorr;
   if ($geschlecht eq "m") {
-    foreach (@verwandte) {
-      push @verwandteKorr, aendereGeschlecht($_);
-    }
+    @verwandte = map { aendereGeschlecht($_) } @verwandte; 
   }
-  else { @verwandteKorr = @verwandteKorr; }
 
-  print "Möglichkeiten: " . join(", ", @verwandteKorr) . "\n";
+  print "Möglichkeiten: " . join(", ", @verwandte) . "\n";
 }
 else {
   $bezeichnung = aendereGeschlecht($bezeichnung) if ($geschlecht eq "m");
@@ -163,7 +160,7 @@ sub eindeutig  {
   elsif ($indexPlus =~ /r/ and $generationStart[2] != 0 and $generationStart[2] == $generationPlus[1]) { #Schwester der Tante-Problem!
 	  $breakpoint = $generationStart[1];
   }
-  elsif ($index =~ /rr/) { #"Schwester der Schwester Problem!
+  elsif ($index =~ /rr/ and $generationStart[0] > -1) { #Schwester der Schwester Problem!
 	  $breakpoint = $generationStart[1];
   }
 
@@ -210,7 +207,7 @@ sub Regel {
   return($index);
 }
 
-##
+###
 #
 # Generation($arg1);
 # $arg1 wird als Weg auf der Ahnentafel benötigt
@@ -219,7 +216,7 @@ sub Regel {
 # und Anzahl us als zurück. Im skalaren Kontext nur
 # die Generation.
 #
-##
+###
 
 sub Generation {
 
