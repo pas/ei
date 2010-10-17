@@ -14,14 +14,25 @@
 use strict;
 use warnings;
 
-#Argument einlesen
-my $stdin = $ARGV[0];
-
 #Falls kein Argument vorhanden, dann abbrechen und Meldung ausgeben.
 unless ($ARGV[0]) {
   print "Argument fehlt! Keine Auswertung möglich.\n";
   exit;
 }
+
+my $stdin = $ARGV[0];
+my $userGeschlecht = $ARGV[1] || 'n';
+
+#Falls Geschlecht des Users nicht angegeben oder ungültig, dann nachfragen
+unless ($userGeschlecht eq 'm' or $userGeschlecht eq 'w') {
+  print "Keine oder ungültige Angaben Ihres Geschlechts.\n";
+ 
+  until($userGeschlecht eq 'm' or $userGeschlecht eq 'w') {
+    print "Sind sie weiblich(w) oder männlich(m)? ";
+    $userGeschlecht = <STDIN>;
+    chomp($userGeschlecht);
+  }
+}	
 
 my $breakpoint = -1; #Zur Bestimmung der Eindeutigkeit eines Resultats
 
@@ -33,7 +44,6 @@ my %mw = ( 	Mutter => "Vater",
 		Tante => "Onkel",
 		Cousine => "Cousin",
 	);
-
 
 my %verwandtschaftIndex = ( 					
 				Mutter => "o",
@@ -59,6 +69,9 @@ $stdin =~ s/neffe(n)*/nichte/gi;
 $stdin =~ s/onkel(s)*/tante/gi;
 $stdin =~ s/cousin(s)* /cousine /gi;
 
+# Eingabe checken
+checkEingabe($stdin);
+
 #Feststellen der Verwandtschaft von hinten nach vorne
 my @aufgespaltet =  $stdin =~ /(cousine(?:\s\d+\.Grades)*|\w*tante(?:\s\d+\.Grades)*|\w*nichte(?:\s\d+\.Grades)*|\w*mutter|\w*tochter|schwester)/ig;
 
@@ -79,9 +92,9 @@ my $bezeichnung = Bezeichnung($index);
 
 if ($breakpoint > -1) {
   print "Kein eindeutiges Resultat möglich!\n";
-  my @verwandte = findeVerwandteLinks($index);
+  my @verwandte = findeVerwandteLinks($index, $userGeschlecht, $geschlecht);
 
-# Richtiges Geschlecht bestimmen. Die Notation stimmt schon, wenn das Geschlecht
+# Richtiges Geschlecht bestimmen. Stimmt schon, wenn das Geschlecht
 # weiblich ist, deshalb wird es nur verändert wenn $geschlecht == "m"
   my @verwandteKorr;
   if ($geschlecht eq "m") {
@@ -94,6 +107,56 @@ else {
   $bezeichnung = aendereGeschlecht($bezeichnung) if ($geschlecht eq "m");
   print "$bezeichnung\n";
 }
+
+###
+# 
+# checkEingabe($arg1)
+# Überprüft die Korrektheit des übergebenen Argumentes
+# $arg1 verlangt einen String
+#
+###
+
+sub checkEingabe {
+   my $stdin = $_[0];
+
+   my @splits = split(' ', lc($stdin));
+
+  for (0..$#splits) {
+    my $akzeptiert = 0;
+    
+    if (               $splits[$_] eq "meiner" 
+		  or $splits[$_] eq "meines"
+  		  or $splits[$_] eq "der"
+  		  or $splits[$_] eq "des" ) {
+      $akzeptiert = 1;
+    }
+    elsif ($_ > 0 and $splits[$_] =~ /\d+\.grades/) {
+        if (	 $splits[$_-1] ne "mutter",
+	     and $splits[$_-1] ne "tochter",
+  	     and $splits[$_-1] ne "schwester" ) {
+          $akzeptiert = 1;
+        }
+    } 
+
+    $splits[$_] =~ /^(?:ur)*(?:gross|enkel)*(.*)$/i;
+    if (defined $verwandtschaftIndex{ucfirst($1)}) {
+  	  $akzeptiert = 1;
+    }
+  
+    if ($akzeptiert == 0) {
+  	  print "Keine korrekte Angabe: $splits[$_]\n";
+    }
+  }
+}
+
+###
+# 
+# aendereGeschlecht($arg1)
+# Ändert eine Bezeichnung von weiblich zu
+# männlich.
+# $arg1 verlangt eine weibliche Bezeichnung.
+#
+###
 
 sub aendereGeschlecht {
   my $bezeichnung = $_[0];
@@ -108,16 +171,20 @@ sub aendereGeschlecht {
 
 ###
 # 
-# findeVerwandteLinks($arg1, $arg2)
+# findeVerwandteLinks($arg1, $arg2, $arg3)
 # Findet alle Verwandten links aus der gleichen
 # Generation, der angegebenen Person.
-# $arg[0] verlangt einen Weg auf der Ahnentafel
+# $arg1 verlangt einen Weg auf der Ahnentafel
 # (keine Bezeichnung!).
+# $arg2 verlangt das Geschlecht des Users
+# $arg3 verlangt das Geschlecht der gesuchten Person
 #
 ###
 
 sub findeVerwandteLinks {
   my $index = $_[0];
+  my $userGeschlecht = $_[1];
+  my $gesuchtGeschlecht = $_[2];
   my @verwandte;
 
   push @verwandte, Bezeichnung($index);
@@ -125,9 +192,19 @@ sub findeVerwandteLinks {
     $index =~ s/u//;
     $index =~ s/o//;    
     push @verwandte, Bezeichnung($index);
+
+
   }
   $index =~ s/r//;
-  push @verwandte, Bezeichnung($index);
+  
+  if ($index) {
+	push @verwandte, Bezeichnung($index);
+  }
+  else  {
+    if ($userGeschlecht eq $gesuchtGeschlecht) {
+      push @verwandte, Bezeichnung($index);
+    }
+  }
 
   return(@verwandte);
 }
@@ -135,12 +212,12 @@ sub findeVerwandteLinks {
 ###
 # 
 # eindeutig($arg1, $arg2)
-# Überprüft, ob ein beim Hinzufügen eines neuen Weges 
+# Überprüft, ob beim Hinzufügen eines neuen Weges 
 # Uneindeutigkeiten entstehen. Falls der Weg
 # nicht eindeutig ist, wird in $breakpoint die
 # Generation, ab welcher sie entsteht, abgespeichrt.
-# $arg1 verlangt den ursprünglichen Weg. $arg2
-# verlangt den Weg, welcher dazugefügt wird.
+# $arg1 verlangt den ursprünglichen Weg. 
+# $arg2 verlangt den Weg, welcher dazugefügt wird.
 #
 ###
 
@@ -335,7 +412,7 @@ sub _Bezeichnung {
 # Weg($arg1)
 # Findet zu einer Bezeichnung den kürzesten Weg auf der
 # Ahnentafel.
-# $arg[0] wird als Bezeichnung eines Verwandten erwartet,
+# $arg1 wird als Bezeichnung eines Verwandten erwartet,
 # z.B. Grossonkel.
 #
 ###
@@ -355,7 +432,7 @@ sub Weg {
   if (		$grundBezeichnung eq "tochter" 
 	     or $grundBezeichnung eq "nichte" ) {
     if ($zusatz) {
-      $grundWeg = Regel($grundWeg); #Da Tochter ur ist kann.
+      $grundWeg = Regel($grundWeg); #Da Tochter ur sei kann.
       $grundWeg .= "u";
       while ($zusatz =~ /ur/g) { $grundWeg .= "u" }
       $grundWeg .= "r" if ($grundBezeichnung eq "tochter");
